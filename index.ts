@@ -1,9 +1,9 @@
 import fastify from 'fastify'
 import { registerFont } from 'canvas'
-import { Canvas, loadImage } from 'canvas-constructor/cairo';
+import { Canvas, loadImage } from 'canvas-constructor/cairo'
 
-registerFont('static/Montserrat-Bold.ttf', { 
-    family: 'montserrat', 
+registerFont('static/Montserrat-Bold.ttf', {
+    family: 'montserrat',
     weight: 'bold'
 })
 
@@ -33,7 +33,7 @@ interface PartialBotObject {
     library: string
 }
 
-type Size = "large" | "small"
+type Size = 'large' | 'small'
 
 function formatNumbers(n: number): string {
     if (n < 1e3) return n.toString()
@@ -52,7 +52,7 @@ function getOwner(botObj: PartialBotObject): User {
             username: botObj.team_owner.name,
             disc: '0000',
             avatar: botObj.team_owner.avatar,
-            status: "online"
+            status: 'online'
         }
     }
 
@@ -64,19 +64,19 @@ interface KV {
 }
 
 const themes: KV = {
-	"violet": "#8b5cec",
-	"blue": "#3b82f6",
-	"rose": "#ef4444",
-	"amber": "#f59e0b",
-	"emerald": "#10b981",
-	"summer": "#e35335",
-	"default": "#472782"
+    violet: '#8b5cec',
+    blue: '#3b82f6',
+    rose: '#ef4444',
+    amber: '#f59e0b',
+    emerald: '#10b981',
+    summer: '#e35335',
+    default: '#472782'
 }
 
 const bgs: KV = {
-	"dark": "#000000",
-	"light": "#16151d",
-	"default": "#271B41"
+    dark: '#000000',
+    light: '#16151d',
+    default: '#271B41'
 }
 
 // Server code
@@ -89,187 +89,163 @@ const app = fastify({
 const paths = ['/bot/:id', '/bots/:id']
 
 paths.forEach(url => {
-    app.get<
-        { 
-            Params: { id: string },
-            Querystring: { theme?: string, accent?: string, size?: Size }
+    app.get<{
+        Params: { id: string }
+        Querystring: { theme?: string; accent?: string; size?: Size }
+    }>(url, async (req, reply) => {
+        let theme = themes['default']
+        let bg = bgs['default']
+        if (req.query.accent && themes[req.query.accent]) {
+            theme = themes[req.query.accent]
         }
-    >(url, async (req, reply) => {
-        let theme = themes["default"];
-        let bg = bgs["default"];
-        if(req.query.accent && themes[req.query.accent]) {
-            theme = themes[req.query.accent];
-        }
-        if(req.query.theme && bgs[req.query.theme]) {
-            bg = bgs[req.query.theme];
+        if (req.query.theme && bgs[req.query.theme]) {
+            bg = bgs[req.query.theme]
         }
 
         // Fetch bot
-        let spider = await fetch(`https://spider.infinitybots.gg/bots/${req.params.id}`);
-        
-        if(!spider.ok) {
+        let spider = await fetch(`https://spider.infinitybots.gg/bots/${req.params.id}`)
+
+        if (!spider.ok) {
             let json = await spider.json()
             reply.code(spider.status).send(json)
             return
-        }    
+        }
 
         let bot: PartialBotObject = await spider.json()
 
         let bot_avatar = decodeURIComponent(bot.user.avatar)
-        .replace('.png', '.png?size=512')
-        .replace('.webp', '.png?size=512');
+            .replace('.png', '.png?size=512')
+            .replace('.webp', '.png?size=512')
 
-        let avatar = await loadImage(bot_avatar);
-        let icon = await loadImage('https://cdn.infinitybots.xyz/images/core/InfinityNewTrans.png');
+        let avatar = await loadImage(bot_avatar)
+        let icon = await loadImage('https://cdn.infinitybots.xyz/images/core/InfinityNewTrans.png')
 
-        let image: Canvas;
+        let image: Canvas
 
         switch (req.query.size) {
-            case "large":
+            case 'large':
                 let botOwner = getOwner(bot)
 
-                let botOwnerName = (botOwner.username.length > 21 ? botOwner.username.slice(0, 17) + '...' : botOwner.username+"#"+botOwner.disc);
+                let botOwnerName =
+                    botOwner.username.length > 21
+                        ? botOwner.username.slice(0, 17) + '...'
+                        : botOwner.username + '#' + botOwner.disc
 
-                if(botOwner.disc == "0000") {
-                    botOwnerName = botOwner.username.length > 21 ? botOwner.username.slice(0, 17) + '...' : botOwner.username;
+                if (botOwner.disc == '0000') {
+                    botOwnerName =
+                        botOwner.username.length > 21 ? botOwner.username.slice(0, 17) + '...' : botOwner.username
                 }
 
                 image = new Canvas(400, 240)
-                .setColor(bg)
-                .printRoundedRectangle(0, 0, 400, 240, 10)
-                .setTextAlign('left')
-                .setTextFont('28px montserrat')
-                .setColor(theme)
-                .printRoundedRectangle(0, 215, 400, 25, 5)
-                .printRoundedRectangle(0, 0, 400, 40, 10)
-                .printRoundedRectangle(10, 180, 185, 25, 10)
-                .printRoundedRectangle(207, 180, 185, 25, 10)
-                .printRoundedRectangle(10, 150, 185, 25, 10)
-                .printRoundedRectangle(207, 150, 185, 25, 10)
-                .printRoundedRectangle(10, 120, 185, 25, 10)
-                .printRoundedRectangle(207, 120, 185, 25, 10)
-                .setColor('#fff')
-                .setTextSize(12)
-                .printText('Infinity Bot List', 30, 230)
-                .printText('infinitybots.gg', 300, 230)
-                .setTextSize(15)
-                .printText(
-                `${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`,
-                20,
-                197,
-                )
-                .printText(
-                `${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`,
-                217,
-                197,
-                )
-                .printText(`${bot.user.status.toUpperCase()}`, 20, 167)
-                .printText(
-                `${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`,
-                217,
-                167,
-                )
-                .printText(botOwnerName, 20, 137)
-                .printText(`${bot.library}`, 217, 137)
-                .setTextSize(17)
-                .printWrappedText(bot.short.length > 75 ? bot.short.slice(0, 75) + '...' : bot.short, 20, 60, 350)
-                .setTextSize(20)
-                .printText(bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,40,25,)
-                .printCircularImage(avatar, 20, 20, 15)
-                .printCircularImage(icon, 20, 227, 10)
-                .setTextFont('10px montserrat').printText(bot.type.toUpperCase() + " BOT", 310, 20); 
-                break;
-            case "small":    
+                    .setColor(bg)
+                    .printRoundedRectangle(0, 0, 400, 240, 10)
+                    .setTextAlign('left')
+                    .setTextFont('28px montserrat')
+                    .setColor(theme)
+                    .printRoundedRectangle(0, 215, 400, 25, 5)
+                    .printRoundedRectangle(0, 0, 400, 40, 10)
+                    .printRoundedRectangle(10, 180, 185, 25, 10)
+                    .printRoundedRectangle(207, 180, 185, 25, 10)
+                    .printRoundedRectangle(10, 150, 185, 25, 10)
+                    .printRoundedRectangle(207, 150, 185, 25, 10)
+                    .printRoundedRectangle(10, 120, 185, 25, 10)
+                    .printRoundedRectangle(207, 120, 185, 25, 10)
+                    .setColor('#fff')
+                    .setTextSize(12)
+                    .printText('Infinity Bot List', 30, 230)
+                    .printText('infinitybots.gg', 300, 230)
+                    .setTextSize(15)
+                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 197)
+                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 197)
+                    .printText(`${bot.user.status.toUpperCase()}`, 20, 167)
+                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 167)
+                    .printText(botOwnerName, 20, 137)
+                    .printText(`${bot.library}`, 217, 137)
+                    .setTextSize(17)
+                    .printWrappedText(bot.short.length > 75 ? bot.short.slice(0, 75) + '...' : bot.short, 20, 60, 350)
+                    .setTextSize(20)
+                    .printText(
+                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
+                        40,
+                        25
+                    )
+                    .printCircularImage(avatar, 20, 20, 15)
+                    .printCircularImage(icon, 20, 227, 10)
+                    .setTextFont('10px montserrat')
+                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
+                break
+            case 'small':
                 image = new Canvas(400, 140)
-                .setColor(bg)
-                .printRoundedRectangle(0, 0, 400, 150, 10)
-                .setTextAlign('left')
-                .setTextFont('28px montserrat')
-                .setColor(theme)
-                .printRoundedRectangle(0, 115, 400, 25, 5)
-                .printRoundedRectangle(0, 0, 400, 40, 10)
-                .printRoundedRectangle(10, 50, 185, 25, 10)
-                .printRoundedRectangle(207, 50, 185, 25, 10)
-                .printRoundedRectangle(10, 80, 185, 25, 10)
-                .printRoundedRectangle(207, 80, 185, 25, 10)
-                .setColor('#fff')
-                .setTextSize(12)
-                .printText('Infinity Bot List', 30, 130)
-                .printText('infinitybots.gg', 300, 130)
-                .setTextSize(15)
-                .printText(
-                `${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`,
-                20,
-                67,
-                )
-                .printText(
-                `${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`,
-                217,
-                67,
-                )
-                .printText(`${bot.user.status.toUpperCase()}`, 20, 97)
-                .printText(
-                `${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`,
-                217,
-                97,
-                )
-                .setTextSize(20)
-                .printText(bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,40,25,)
-                .printCircularImage(avatar, 20, 20, 15)
-                .printCircularImage(icon, 20, 127, 10)
-                .setTextFont('10px montserrat').printText(bot.type.toUpperCase() + " BOT", 310, 20);      
-                break; 
+                    .setColor(bg)
+                    .printRoundedRectangle(0, 0, 400, 150, 10)
+                    .setTextAlign('left')
+                    .setTextFont('28px montserrat')
+                    .setColor(theme)
+                    .printRoundedRectangle(0, 115, 400, 25, 5)
+                    .printRoundedRectangle(0, 0, 400, 40, 10)
+                    .printRoundedRectangle(10, 50, 185, 25, 10)
+                    .printRoundedRectangle(207, 50, 185, 25, 10)
+                    .printRoundedRectangle(10, 80, 185, 25, 10)
+                    .printRoundedRectangle(207, 80, 185, 25, 10)
+                    .setColor('#fff')
+                    .setTextSize(12)
+                    .printText('Infinity Bot List', 30, 130)
+                    .printText('infinitybots.gg', 300, 130)
+                    .setTextSize(15)
+                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 67)
+                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 67)
+                    .printText(`${bot.user.status.toUpperCase()}`, 20, 97)
+                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 97)
+                    .setTextSize(20)
+                    .printText(
+                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
+                        40,
+                        25
+                    )
+                    .printCircularImage(avatar, 20, 20, 15)
+                    .printCircularImage(icon, 20, 127, 10)
+                    .setTextFont('10px montserrat')
+                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
+                break
             default:
                 image = new Canvas(400, 180)
-                .setColor(bg)
-                .printRoundedRectangle(0, 0, 400, 180, 10)
-                .setTextAlign('left')
-                .setTextFont('28px montserrat')
-                .setColor(theme)
-                .printRoundedRectangle(0, 155, 400, 25, 5)
-                .printRoundedRectangle(0, 0, 400, 40, 10)
-                .printRoundedRectangle(10, 120, 185, 25, 10)
-                .printRoundedRectangle(207, 120, 185, 25, 10)
-                .printRoundedRectangle(10, 90, 185, 25, 10)
-                .printRoundedRectangle(207, 90, 185, 25, 10)
-                .setColor('#fff')
-                .setTextSize(12)
-                .printText('Infinity Bot List', 30, 170)
-                .printText('infinitybots.gg', 300, 170)
-                .setTextSize(15)
-                .printText(
-                `${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`,
-                20,
-                137,
-                )
-                .printText(
-                `${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`,
-                217,
-                137,
-                )
-                .printText(`${bot.user.status.toUpperCase()}`, 20, 107)
-                .printText(
-                `${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`,
-                217,
-                107,
-                )
-                .setTextSize(17)
-                .printWrappedText(
-                bot.short.length > 42 ? bot.short.slice(0, 42) + '...' : bot.short,
-                20,
-                60,
-                350,
-                )
-                .setTextSize(20)
-                .printText(bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,40,25,)
-                .printCircularImage(avatar, 20, 20, 15)
-                .printCircularImage(icon, 20, 167, 10)
-                .setTextFont('10px montserrat').printText(bot.type.toUpperCase() + " BOT", 310, 20);    
+                    .setColor(bg)
+                    .printRoundedRectangle(0, 0, 400, 180, 10)
+                    .setTextAlign('left')
+                    .setTextFont('28px montserrat')
+                    .setColor(theme)
+                    .printRoundedRectangle(0, 155, 400, 25, 5)
+                    .printRoundedRectangle(0, 0, 400, 40, 10)
+                    .printRoundedRectangle(10, 120, 185, 25, 10)
+                    .printRoundedRectangle(207, 120, 185, 25, 10)
+                    .printRoundedRectangle(10, 90, 185, 25, 10)
+                    .printRoundedRectangle(207, 90, 185, 25, 10)
+                    .setColor('#fff')
+                    .setTextSize(12)
+                    .printText('Infinity Bot List', 30, 170)
+                    .printText('infinitybots.gg', 300, 170)
+                    .setTextSize(15)
+                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 137)
+                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 137)
+                    .printText(`${bot.user.status.toUpperCase()}`, 20, 107)
+                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 107)
+                    .setTextSize(17)
+                    .printWrappedText(bot.short.length > 42 ? bot.short.slice(0, 42) + '...' : bot.short, 20, 60, 350)
+                    .setTextSize(20)
+                    .printText(
+                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
+                        40,
+                        25
+                    )
+                    .printCircularImage(avatar, 20, 20, 15)
+                    .printCircularImage(icon, 20, 167, 10)
+                    .setTextFont('10px montserrat')
+                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
         }
 
         let imgBuf = await image.toBufferAsync()
 
-        reply.type("image/png");
+        reply.type('image/png')
 
         reply.send(imgBuf)
     })
@@ -281,13 +257,11 @@ app.addHook('preHandler', (req, reply, done) => {
 })
 
 app.setNotFoundHandler({}, function (request, reply) {
-    reply
-        .status(404)
-        .send({
-            message:
-                'You seem lost, you may need to reference our widget docs here: https://docs.botlist.site/resources/widgets',
-            error: false
-        })
+    reply.status(404).send({
+        message:
+            'You seem lost, you may need to reference our widget docs here: https://docs.botlist.site/resources/widgets',
+        error: false
+    })
 })
 
 app.setErrorHandler(function (error, request, reply) {
