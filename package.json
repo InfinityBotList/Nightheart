@@ -1,0 +1,25 @@
+{
+  "name": "nightheart",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "format": "prettier -w index.ts",
+    "build": "tsc -p tsconfig.json",
+    "bstart": "npm run build && node index.js",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "canvas": "^2.11.0",
+    "canvas-constructor": "^7.0.0",
+    "fastify": "^4.14.0",
+    "prettier": "^2.8.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.14.6",
+    "typescript": "^4.9.5"
+  }
+}
