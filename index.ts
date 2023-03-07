@@ -10,7 +10,7 @@ registerFont('static/Montserrat-Bold.ttf', {
 interface User {
     id: string
     username: string
-    disc: string
+    discriminator: string
     avatar: string
     status: string
 }
@@ -50,7 +50,7 @@ function getOwner(botObj: PartialBotObject): User {
         return {
             id: botObj.team_owner.id,
             username: botObj.team_owner.name,
-            disc: '0000',
+            discriminator: '0000',
             avatar: botObj.team_owner.avatar,
             status: 'online'
         }
@@ -129,9 +129,9 @@ paths.forEach(url => {
                 let botOwnerName =
                     botOwner.username.length > 21
                         ? botOwner.username.slice(0, 17) + '...'
-                        : botOwner.username + '#' + botOwner.disc
+                        : botOwner.username + '#' + botOwner.discriminator
 
-                if (botOwner.disc == '0000') {
+                if (botOwner.discriminator == '0000') {
                     botOwnerName =
                         botOwner.username.length > 21 ? botOwner.username.slice(0, 17) + '...' : botOwner.username
                 }
