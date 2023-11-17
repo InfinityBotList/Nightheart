@@ -1,0 +1,4 @@
+typegen:
+    path: 'generated'
+    projects:
+        - popplio

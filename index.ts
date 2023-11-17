@@ -1,39 +1,16 @@
 import fastify from 'fastify'
 import { registerFont } from 'canvas'
 import { Canvas, loadImage } from 'canvas-constructor/cairo'
+import { Bot, SEO, Team, Vanity } from './generated/popplio/types';
+import { apiUrl, bgs, cdnUrl, extraDataPositionMap, themes } from './consts';
+import { resolveAssetMetadataToPath } from './assetmgmt';
+
+type Size = 'large' | 'small'
 
 registerFont('static/Montserrat-Bold.ttf', {
     family: 'montserrat',
     weight: 'bold'
 })
-
-interface User {
-    id: string
-    username: string
-    discriminator: string
-    avatar: string
-    status: string
-}
-
-interface TeamOwner {
-    id: string
-    name: string
-    avatar: string
-}
-
-interface PartialBotObject {
-    user: User
-    owner?: User
-    team_owner?: TeamOwner
-    servers: number
-    shards: number
-    votes: number
-    short: string
-    type: string
-    library: string
-}
-
-type Size = 'large' | 'small'
 
 function formatNumbers(n: number): string {
     if (n < 1e3) return n.toString()
@@ -44,40 +21,34 @@ function formatNumbers(n: number): string {
     return n.toString()
 }
 
-function getOwner(botObj: PartialBotObject): User {
-    if (botObj.owner) return botObj.owner
-    if (botObj.team_owner) {
-        return {
-            id: botObj.team_owner.id,
-            username: botObj.team_owner.name,
-            discriminator: '0000',
-            avatar: botObj.team_owner.avatar,
-            status: 'online'
-        }
-    }
-
-    throw new Error('No owner found')
+const slice = (s: string, maxLength: number = 21): string => {
+    return s.length > maxLength ? s.slice(0, maxLength-3) + "..." : s
 }
 
-interface KV {
-    [key: string]: string
+/**
+ * Represents extra data of a widget entity
+ */
+interface ExtraData {
+    name: string;
+    value: string | number;
+    format: (imageSize: string) => string;
 }
 
-const themes: KV = {
-    violet: '#8b5cec',
-    blue: '#3b82f6',
-    rose: '#ef4444',
-    amber: '#f59e0b',
-    emerald: '#10b981',
-    summer: '#e35335',
-    default: '#472782'
-}
-
-const bgs: KV = {
-    dark: '#000000',
-    light: '#16151d',
-    default: '#271B41'
-}
+/**
+ * Represents the internal abstraction of a widget entity
+ */
+interface WidgetEntityData {
+    id: string;
+    platformName: string // Until we decide on a final name for the list
+    name: string;
+    displayName: string;
+    ownerName: string;
+    ownerDisplayName: string;
+    avatar: string;
+    short: string;
+    type: string;
+    extraData: ExtraData[];
+}  
 
 // Server code
 const app = fastify({
@@ -86,7 +57,7 @@ const app = fastify({
     keepAliveTimeout: 5
 })
 
-const paths = ['/bot/:id', '/bots/:id']
+const paths = ['/bot/:id', '/bots/:id', "/servers/:id", "/server/:id"]
 
 paths.forEach(url => {
     app.get<{
@@ -102,157 +73,190 @@ paths.forEach(url => {
             bg = bgs[req.query.theme]
         }
 
-        // Fetch bot
-        let spider = await fetch(`https://spider.infinitybots.gg/bots/${req.params.id}`)
+        let codeRes = await fetch(`${apiUrl}/vanity/${req.params.id}`)
 
-        if (!spider.ok) {
-            let json = await spider.json()
-            reply.code(spider.status).send(json)
+        if (!codeRes.ok) {
+            let text = await codeRes.text()
+            reply.header("Content-Type", "application/json")
+            reply.code(codeRes.status).send(text)
             return
         }
 
-        let bot: PartialBotObject = await spider.json()
+        let code: Vanity = await codeRes.json()
 
-        let bot_avatar = decodeURIComponent(bot.user.avatar)
-            .replace('.png', '.png?size=512')
-            .replace('.webp', '.png?size=512')
+        let data: WidgetEntityData | undefined
 
-        let avatar = await loadImage(bot_avatar)
-        let icon = await loadImage('https://cdn.infinitybots.xyz/images/core/InfinityNewTrans.png')
-
-        let image: Canvas
-
-        switch (req.query.size) {
-            case 'large':
-                let botOwner = getOwner(bot)
-
-                let botOwnerName =
-                    botOwner.username.length > 21
-                        ? botOwner.username.slice(0, 17) + '...'
-                        : botOwner.username + '#' + botOwner.discriminator
-
-                if (botOwner.discriminator == '0000') {
-                    botOwnerName =
-                        botOwner.username.length > 21 ? botOwner.username.slice(0, 17) + '...' : botOwner.username
+        switch (code.target_type) {
+            case "bot":
+                // Fetch bot
+                let botReq = await fetch(`https://spider.infinitybots.gg/bots/${req.params.id}`)
+            
+                if (!botReq.ok) {
+                    let json = await botReq.json()
+                    reply.code(botReq.status).send(json)
+                    return
+                }
+            
+                let bot: Bot = await botReq.json()
+            
+                if(!bot.user) {
+                    reply.status(500).send({
+                        message:
+                            'Something broke: Invalid bot object was returned',
+                        error: true
+                    })
+                    return
                 }
 
-                image = new Canvas(400, 240)
-                    .setColor(bg)
-                    .printRoundedRectangle(0, 0, 400, 240, 10)
-                    .setTextAlign('left')
-                    .setTextFont('28px montserrat')
-                    .setColor(theme)
-                    .printRoundedRectangle(0, 215, 400, 25, 5)
-                    .printRoundedRectangle(0, 0, 400, 40, 10)
-                    .printRoundedRectangle(10, 180, 185, 25, 10)
-                    .printRoundedRectangle(207, 180, 185, 25, 10)
-                    .printRoundedRectangle(10, 150, 185, 25, 10)
-                    .printRoundedRectangle(207, 150, 185, 25, 10)
-                    .printRoundedRectangle(10, 120, 185, 25, 10)
-                    .printRoundedRectangle(207, 120, 185, 25, 10)
-                    .setColor('#fff')
-                    .setTextSize(12)
-                    .printText('Infinity Bot List', 30, 230)
-                    .printText('infinitybots.gg', 300, 230)
-                    .setTextSize(15)
-                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 197)
-                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 197)
-                    .printText(`${bot.user.status.toUpperCase()}`, 20, 167)
-                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 167)
-                    .printText(botOwnerName, 20, 137)
-                    .printText(`${bot.library}`, 217, 137)
-                    .setTextSize(17)
-                    .printWrappedText(bot.short.length > 75 ? bot.short.slice(0, 75) + '...' : bot.short, 20, 60, 350)
-                    .setTextSize(20)
-                    .printText(
-                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
-                        40,
-                        25
-                    )
-                    .printCircularImage(avatar, 20, 20, 15)
-                    .printCircularImage(icon, 20, 227, 10)
-                    .setTextFont('10px montserrat')
-                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
-                break
-            case 'small':
-                image = new Canvas(400, 140)
-                    .setColor(bg)
-                    .printRoundedRectangle(0, 0, 400, 150, 10)
-                    .setTextAlign('left')
-                    .setTextFont('28px montserrat')
-                    .setColor(theme)
-                    .printRoundedRectangle(0, 115, 400, 25, 5)
-                    .printRoundedRectangle(0, 0, 400, 40, 10)
-                    .printRoundedRectangle(10, 50, 185, 25, 10)
-                    .printRoundedRectangle(207, 50, 185, 25, 10)
-                    .printRoundedRectangle(10, 80, 185, 25, 10)
-                    .printRoundedRectangle(207, 80, 185, 25, 10)
-                    .setColor('#fff')
-                    .setTextSize(12)
-                    .printText('Infinity Bot List', 30, 130)
-                    .printText('infinitybots.gg', 300, 130)
-                    .setTextSize(15)
-                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 67)
-                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 67)
-                    .printText(`${bot.user.status.toUpperCase()}`, 20, 97)
-                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 97)
-                    .setTextSize(20)
-                    .printText(
-                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
-                        40,
-                        25
-                    )
-                    .printCircularImage(avatar, 20, 20, 15)
-                    .printCircularImage(icon, 20, 127, 10)
-                    .setTextFont('10px montserrat')
-                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
-                break
+                let ownerName: string = "Unknown"
+                let ownerDisplayName: string = "Unknown"
+
+                if (bot.owner) {
+                    ownerName = bot.owner.username
+                    ownerDisplayName = bot.owner.display_name || bot.owner.username
+                } else if (bot.team_owner) {
+                    ownerName = bot.team_owner.name
+                    ownerDisplayName = bot.team_owner.name
+                }
+
+                let userStatus: string = bot.user.status
+
+                data = {
+                    id: bot.bot_id,
+                    platformName: 'Infinity Bots',
+                    name: bot.user.username,
+                    displayName: bot.user.username,
+                    ownerName,
+                    ownerDisplayName,
+                    avatar: bot.user.avatar,
+                    short: bot.short,
+                    type: bot.type,
+                    extraData: [
+                        {
+                            name: "Servers",
+                            value: bot.servers,
+                            format: () => `${formatNumbers(bot.servers)} SERVERS`
+                        },
+                        {
+                            name: "Shards",
+                            value: bot.shards,
+                            format: () => `${formatNumbers(bot.shards)} SHARDS`
+                        },
+                        {
+                            name: "Status",
+                            value: userStatus,
+                            format: () => userStatus.toUpperCase()
+                        },
+                        {
+                            name: "Votes",
+                            value: bot.votes,
+                            format: () => `${formatNumbers(bot.votes)} VOTES`
+                        },
+                        {
+                            name: "Owner Name",
+                            value: ownerName,
+                            format: () => ownerName
+                        },
+                        {
+                            name: "Library",
+                            value: bot.library,
+                            format: () => bot.library
+                        }
+                    ],
+                }
+                break;
             default:
-                image = new Canvas(400, 180)
-                    .setColor(bg)
-                    .printRoundedRectangle(0, 0, 400, 180, 10)
-                    .setTextAlign('left')
-                    .setTextFont('28px montserrat')
-                    .setColor(theme)
-                    .printRoundedRectangle(0, 155, 400, 25, 5)
-                    .printRoundedRectangle(0, 0, 400, 40, 10)
-                    .printRoundedRectangle(10, 120, 185, 25, 10)
-                    .printRoundedRectangle(207, 120, 185, 25, 10)
-                    .printRoundedRectangle(10, 90, 185, 25, 10)
-                    .printRoundedRectangle(207, 90, 185, 25, 10)
-                    .setColor('#fff')
-                    .setTextSize(12)
-                    .printText('Infinity Bot List', 30, 170)
-                    .printText('infinitybots.gg', 300, 170)
-                    .setTextSize(15)
-                    .printText(`${bot.servers === 0 ? 'N/A' : formatNumbers(bot.servers)} SERVERS`, 20, 137)
-                    .printText(`${bot.shards === 0 ? 'N/A' : formatNumbers(bot.shards)} SHARDS`, 217, 137)
-                    .printText(`${bot.user.status.toUpperCase()}`, 20, 107)
-                    .printText(`${bot.votes === 0 ? 0 : formatNumbers(bot.votes)} VOTES`, 217, 107)
-                    .setTextSize(17)
-                    .printWrappedText(bot.short.length > 42 ? bot.short.slice(0, 42) + '...' : bot.short, 20, 60, 350)
-                    .setTextSize(20)
-                    .printText(
-                        bot.user.username.length > 25 ? bot.user.username.slice(0, 25) + '...' : bot.user.username,
-                        40,
-                        25
-                    )
-                    .printCircularImage(avatar, 20, 20, 15)
-                    .printCircularImage(icon, 20, 167, 10)
-                    .setTextFont('10px montserrat')
-                    .printText(bot.type.toUpperCase() + ' BOT', 310, 20)
+                reply.status(500).send({
+                    message:
+                        `This target type (${code.target_type}) is not supported`,
+                    vanityRecieved: code,
+                })
+                return
         }
 
+        if(!data) {
+            reply.status(500).send({
+                message:
+                    `Internal error: Target type registered (${code.target_type}) but no data was set in handler`,
+                error: true
+            })
+            return
+        }
+        
+        let avatarUrl = decodeURIComponent(data.avatar);
+    
+        let avatar = await loadImage(avatarUrl)
+        let icon = await loadImage(`${cdnUrl}/core/full_logo.webp`)
+    
+        let size = req.query.size || 'large';
+        if(!extraDataPositionMap[size]) {
+            reply.status(500).send({
+                message: `Internal error: Invalid size specified (${size})`,
+            })
+            return
+        }
+
+        let sizeData = extraDataPositionMap[size]
+
+        let image: Canvas = new Canvas(sizeData.size[0], sizeData.size[1])
+            .setColor(bg)
+            .printRoundedRectangle(0, 0, sizeData.size[0], sizeData.size[1], 10)
+            .setTextAlign('left')
+            .setTextFont('28px montserrat')
+            .setColor(theme);
+
+        image = sizeData.init(image) // Add size-specific data
+
+        image
+            .setColor('#fff')
+            .setTextSize(12)
+            .printText(data.platformName, 30, 230)
+            .printText('infinitybots.gg', 300, 230)
+            .setTextSize(15);
+        
+        let currXIndex = 0
+        let currY = sizeData.posMap[1][0] // [end][start]
+        let yOffset = sizeData.posMap[1][1] // [end][offset]
+
+        for(let i = 0; i < data.extraData.length; i++) {
+            image.printText(data.extraData[i].format(size), sizeData.posMap[0][currXIndex], currY)
+
+            if(currXIndex < sizeData.posMap[0].length - 1) {
+                currXIndex++
+            } else {
+                currXIndex = 0
+                currY += yOffset
+            }
+        }
+
+        image
+            .setTextSize(17)
+            .printWrappedText(slice(data.short), 20, 60, 350)
+            .setTextSize(20)
+            .printText(
+                slice(data.displayName, 25),
+                40,
+                25
+            );
+
+        image = sizeData.addIcons(avatar, icon, image) // Add the icons
+            
+        image.setTextFont('10px montserrat')
+            .printText(`${data.type.toUpperCase()} ${code.target_type.toUpperCase()}`, 310, 20)
+        
         let imgBuf = await image.toBufferAsync()
-
+    
         reply.type('image/png')
-
+    
         reply.send(imgBuf)
-    })
+    })    
 })
 
 app.addHook('preHandler', (req, reply, done) => {
     reply.header('X-Powered-By', 'Infinity Development')
+    reply.header('Access-Control-Allow-Origin', '*')
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    reply.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
     done()
 })
 
@@ -260,7 +264,6 @@ app.setNotFoundHandler({}, function (request, reply) {
     reply.status(404).send({
         message:
             'You seem lost, you may need to reference our widget docs here: https://docs.botlist.site/resources/widgets',
-        error: false
     })
 })
 
@@ -271,7 +274,7 @@ app.setErrorHandler(function (error, request, reply) {
         // Send error response
         reply
             .status(500)
-            .send({ message: 'Something broke: Invalid status code was attempted to be sent', error: false })
+            .send({ message: 'Something broke: Invalid status code was attempted to be sent' })
     } else {
         // fastify will use parent error handler to handle this
         reply.send(error)

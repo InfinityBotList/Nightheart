@@ -1,0 +1,24 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Permission = void 0;
+var Permission;
+(function (Permission) {
+    Permission["Add"] = "add";
+    Permission["Edit"] = "edit";
+    Permission["Resubmit"] = "resubmit";
+    Permission["SetVanity"] = "set_vanity";
+    Permission["RequestCert"] = "request_cert";
+    Permission["ViewApiTokens"] = "view_api_tokens";
+    Permission["ResetApiTokens"] = "reset_api_tokens";
+    Permission["GetWebhooks"] = "get_webhooks";
+    Permission["EditWebhooks"] = "edit_webhooks";
+    Permission["TestWebhooks"] = "test_webhooks";
+    Permission["GetWebhookLogs"] = "get_webhook_logs";
+    Permission["DeleteWebhookLogs"] = "delete_webhook_logs";
+    Permission["UploadAssets"] = "upload_assets";
+    Permission["DeleteAssets"] = "delete_assets";
+    Permission["CreateOwnerReview"] = "create_owner_review";
+    Permission["EditOwnerReview"] = "edit_owner_review";
+    Permission["Delete"] = "delete";
+    Permission["Owner"] = "*";
+})(Permission = exports.Permission || (exports.Permission = {}));
