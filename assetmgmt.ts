@@ -1,6 +1,7 @@
 // From Infinity-Next, src/utils/funcs/assetmgmt.ts
 import { cdnUrl } from './consts'
 import { AssetMetadata } from './generated/popplio/types'
+import logger from './logger'
 
 interface RAMPOptions {
     /**
@@ -32,7 +33,7 @@ export const resolveAssetMetadataToPath = (assetMetadata: AssetMetadata, options
 
     if (assetMetadata?.exists) {
         if (!assetMetadata?.path) {
-            console.warn('ResolveAssetMetadataToPath', 'assetMetadata exists but has no path', assetMetadata)
+            logger.warn('ResolveAssetMetadataToPath', 'assetMetadata exists but has no path', assetMetadata)
             assetMetadata.path = ''
         }
         path = assetMetadata.path

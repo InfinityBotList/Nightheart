@@ -21,4 +21,4 @@ var Permission;
     Permission["EditOwnerReview"] = "edit_owner_review";
     Permission["Delete"] = "delete";
     Permission["Owner"] = "*";
-})(Permission = exports.Permission || (exports.Permission = {}));
+})(Permission || (exports.Permission = Permission = {}));

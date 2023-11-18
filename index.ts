@@ -1,9 +1,11 @@
 import fastify from 'fastify'
 import { registerFont } from 'canvas'
-import { Canvas, loadImage } from 'canvas-constructor/cairo'
-import { Bot, SEO, Team, Vanity } from './generated/popplio/types';
-import { apiUrl, bgs, cdnUrl, extraDataPositionMap, themes } from './consts';
+import { Canvas } from 'canvas-constructor/cairo'
+import { Bot, Vanity } from './generated/popplio/types';
+import { apiUrl, bgs, cdnDefaultAvatar, cdnFullLogo, extraDataPositionMap, pngCacheClearInterval, pngCached, themes } from './consts';
 import { resolveAssetMetadataToPath } from './assetmgmt';
+import logger from './logger';
+import { cleanPngCache, loadAsPng } from './imgdl';
 
 type Size = 'large' | 'small'
 
@@ -44,6 +46,7 @@ interface WidgetEntityData {
     displayName: string;
     ownerName: string;
     ownerDisplayName: string;
+    ownerAvatar: string;
     avatar: string;
     short: string;
     type: string;
@@ -57,9 +60,28 @@ const app = fastify({
     keepAliveTimeout: 5
 })
 
-const paths = ['/bot/:id', '/bots/:id', "/servers/:id", "/server/:id"]
+const paths = [
+    {
+        path: '/bot/:id',
+        targetType: 'bot'
+    },
+    {
+        path: '/bots/:id',
+        targetType: 'bot'
+    },
+    {
+        path: '/servers/:id',
+        targetType: 'server'
+    },
+    {
+        path: '/server/:id',
+        targetType: 'server'
+    }
+]
 
-paths.forEach(url => {
+paths.forEach(data => {
+    let url = data.path
+    let forTargetType = data.targetType
     app.get<{
         Params: { id: string }
         Querystring: { theme?: string; accent?: string; size?: Size }
@@ -84,12 +106,20 @@ paths.forEach(url => {
 
         let code: Vanity = await codeRes.json()
 
+        if(code.target_type != forTargetType) {
+            reply.status(500).send({
+                message:
+                    `This widget is not for the target type specified ${code.target_type} != ${forTargetType}`,
+            })
+            return
+        }
+
         let data: WidgetEntityData | undefined
 
         switch (code.target_type) {
             case "bot":
                 // Fetch bot
-                let botReq = await fetch(`https://spider.infinitybots.gg/bots/${req.params.id}`)
+                let botReq = await fetch(`https://spider.infinitybots.gg/bots/${code.target_id}`)
             
                 if (!botReq.ok) {
                     let json = await botReq.json()
@@ -110,13 +140,18 @@ paths.forEach(url => {
 
                 let ownerName: string = "Unknown"
                 let ownerDisplayName: string = "Unknown"
+                let ownerAvatar: string = cdnDefaultAvatar
 
                 if (bot.owner) {
                     ownerName = bot.owner.username
                     ownerDisplayName = bot.owner.display_name || bot.owner.username
+                    ownerAvatar = bot.owner.avatar
                 } else if (bot.team_owner) {
                     ownerName = bot.team_owner.name
                     ownerDisplayName = bot.team_owner.name
+                    if(bot.team_owner.avatar) {
+                        ownerAvatar = resolveAssetMetadataToPath(bot.team_owner.avatar)
+                    }
                 }
 
                 let userStatus: string = bot.user.status
@@ -128,6 +163,7 @@ paths.forEach(url => {
                     displayName: bot.user.username,
                     ownerName,
                     ownerDisplayName,
+                    ownerAvatar,
                     avatar: bot.user.avatar,
                     short: bot.short,
                     type: bot.type,
@@ -185,8 +221,8 @@ paths.forEach(url => {
         
         let avatarUrl = decodeURIComponent(data.avatar);
     
-        let avatar = await loadImage(avatarUrl)
-        let icon = await loadImage(`${cdnUrl}/core/full_logo.webp`)
+        let avatar = await loadAsPng(avatarUrl)
+        let icon = await loadAsPng(`${cdnFullLogo}`)
     
         let size = req.query.size || 'large';
         if(!extraDataPositionMap[size]) {
@@ -231,7 +267,7 @@ paths.forEach(url => {
 
         image
             .setTextSize(17)
-            .printWrappedText(slice(data.short), 20, 60, 350)
+            .printWrappedText(slice(data.short, 75), 20, 60, 350)
             .setTextSize(20)
             .printText(
                 slice(data.displayName, 25),
@@ -271,6 +307,7 @@ app.setErrorHandler(function (error, request, reply) {
     if (error instanceof fastify.errorCodes.FST_ERR_BAD_STATUS_CODE) {
         // Log error
         this.log.error(error)
+        logger.error("Server.ErrorHandler", `Invalid status code was attempted to be sent: ${error}`)
         // Send error response
         reply
             .status(500)
@@ -287,19 +324,31 @@ if (process.env.PORT) {
     port = parseInt(process.env.PORT)
 
     if (!port) {
-        console.error('Invalid port specified, using default port 3000')
+        logger.error('Server', 'Invalid port specified, using default port 3000')
         process.exit(1)
     }
 
-    console.info(`Using port ${port}`)
+    logger.info('Server', `Using port ${port}`)
 } else {
-    console.warn('No port specified, using default port 3000')
+    logger.warn('Server', 'No port specified, using default port 3000')
 }
 
 app.listen({ port: port }, (err, address) => {
     if (err) {
-        console.error(err)
+        logger.error('Server', "Server listen failed", err)
         process.exit(1)
     }
-    console.log(`Server listening at ${address}`)
+    logger.info('Server', `Server listening at ${address}`)
+
+    // Start background tasks
+    if(pngCached) {
+        setInterval(() => {
+            try {
+                logger.info("bgTask.png", `[bgTask] Clearing PNG cache.`)
+                cleanPngCache()
+            } catch (err) {
+                logger.error("bgTask.png", `Failed to clear PNG cache: ${err}`)
+            }
+        }, pngCacheClearInterval)
+    }
 })

@@ -1,7 +1,13 @@
 import { Canvas, Image } from "canvas-constructor/cairo";
 
 export const cdnUrl = 'https://cdn.infinitybots.gg';
+export const cdnDefaultAvatar = `${cdnUrl}/avatars/default.webp`
+export const cdnFullLogo = `${cdnUrl}/core/full_logo.webp`
 export const apiUrl = 'https://spider.infinitybots.gg';
+export const cacheDir ='.cache'
+export const pngCached = false // We don't need it right now
+export const pngCacheClearAge = 28800000 // 8 hours (in ms)
+export const pngCacheClearInterval = 3600000 // 1 hour (in ms)
 
 interface KV {
     [key: string]: string
