@@ -333,7 +333,7 @@ if (process.env.PORT) {
     logger.warn('Server', 'No port specified, using default port 3000')
 }
 
-app.listen({ port: port }, (err, address) => {
+app.listen({ port: port, host: "0.0.0.0" }, (err, address) => {
     if (err) {
         logger.error('Server', "Server listen failed", err)
         process.exit(1)
